@@ -5,131 +5,129 @@ models:
     description: |
       Canonical Verisk-format GL transaction fact. One row per source row
       (policy row, optionally with claim).
+    semantic_model:
+      enabled: true
+    agg_time_dimension: eval_date
 
     columns:
       - name: carrier_code
-        tests: [not_null]
+        data_tests: [not_null]
+        dimension:
+          type: categorical
 
       - name: submission_id
-        tests: [not_null]
+        data_tests: [not_null]
+        entity:
+          type: unique
+          name: submission
 
       - name: eval_date
-        tests: [not_null]
+        data_tests: [not_null]
+        granularity: day
+        dimension:
+          type: time
 
       - name: policy_id
-        tests: [not_null]
+        data_tests: [not_null]
+        entity:
+          type: primary
+          name: policy
 
       - name: location_id
+        entity:
+          type: foreign
+          name: location
 
       - name: claim_id
+        entity:
+          type: foreign
+          name: claim
 
       - name: claimant_id
+        entity:
+          type: foreign
+          name: claimant
 
       - name: policy_eff_date
-        tests: [not_null]
+        data_tests: [not_null]
+        granularity: day
+        dimension:
+          type: time
 
       - name: policy_exp_date
-        tests: [not_null]
+        data_tests: [not_null]
+        granularity: day
+        dimension:
+          type: time
 
       - name: policy_size_band
-        tests:
+        data_tests:
           - accepted_values:
               arguments:
                 values: ['MICRO', 'SMALL', 'MEDIUM', 'LARGE', 'JUMBO']
+        dimension:
+          type: categorical
 
       - name: st
-        tests:
+        data_tests:
           - not_null:
               config:
                 severity: warn
+        dimension:
+          type: categorical
 
       - name: sub
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ['GL-PO', 'GL-PC']
-
-      - name: terr
-
-      - name: zip_cd
-
-      - name: mcg
+        dimension:
+          type: categorical
 
       - name: class
-
-      - name: year
-        tests: [not_null]
-
-      - name: qtr
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: [1, 2, 3, 4]
-
-      - name: acc_year
-
-      - name: acc_qtr
-        tests:
-          - accepted_values:
-              arguments:
-                values: [1, 2, 3, 4]
-              config:
-                where: "acc_qtr is not null"
-
-      - name: rep_year
-
-      - name: rep_qtr
-        tests:
-          - accepted_values:
-              arguments:
-                values: [1, 2, 3, 4]
-              config:
-                where: "rep_qtr is not null"
-
-      - name: top
-        tests:
-          - accepted_values:
-              arguments:
-                values: ['MONO', 'PKG']
+        dimension:
+          type: categorical
 
       - name: cov
-        tests:
+        data_tests:
           - not_null
           - accepted_values:
               arguments:
                 values: ['OCC', 'CM']
-
-      - name: exp_ind
-
-      - name: exp_base
-
-      - name: tol
+        dimension:
+          type: categorical
 
       - name: sol
-        tests:
+        data_tests:
           - accepted_values:
               arguments:
                 values: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
               config:
                 where: "sol is not null"
+        dimension:
+          type: categorical
 
       - name: claim_status
-        tests:
+        data_tests:
           - accepted_values:
               arguments:
                 values: ['O', 'C', 'R']
               config:
                 where: "claim_status is not null"
+        dimension:
+          type: categorical
 
       - name: status_date
+        granularity: day
+        dimension:
+          type: time
 
       - name: wprem
-        tests: [not_null]
+        data_tests: [not_null]
 
       - name: prem
-        tests:
+        data_tests:
           - expression_is_true:
               arguments:
                 expression: "<= wprem * 1.001"
@@ -158,3 +156,90 @@ models:
       - name: i_occs
 
       - name: qc_flag
+
+    metrics:
+      - name: transaction_count
+        type: simple
+        label: Transaction Count
+        agg: count
+        expr: 1
+
+      - name: written_premium
+        type: simple
+        label: Written Premium
+        agg: sum
+        expr: wprem
+
+      - name: earned_premium
+        type: simple
+        label: Earned Premium
+        agg: sum
+        expr: prem
+
+      - name: exposure
+        type: simple
+        label: Exposure
+        agg: sum
+        expr: expo
+
+      - name: weighted_exposure
+        type: simple
+        label: Weighted Exposure
+        agg: sum
+        expr: wexpo
+
+      - name: total_paid_indemnity
+        type: simple
+        label: Total Paid Indemnity
+        agg: sum
+        expr: tl_paid_indem
+
+      - name: total_incurred_indemnity
+        type: simple
+        label: Total Incurred Indemnity
+        agg: sum
+        expr: tl_inc_indem
+
+      - name: paid_alae
+        type: simple
+        label: Paid ALAE
+        agg: sum
+        expr: p_alae
+
+      - name: incurred_alae
+        type: simple
+        label: Incurred ALAE
+        agg: sum
+        expr: i_alae
+
+      - name: total_paid_ulae
+        type: simple
+        label: Total Paid ULAE
+        agg: sum
+        expr: tl_paid_ulae
+
+      - name: total_incurred_ulae
+        type: simple
+        label: Total Incurred ULAE
+        agg: sum
+        expr: tl_inc_ulae
+
+      - name: paid_occurrences
+        type: simple
+        label: Paid Occurrences
+        agg: sum
+        expr: p_occs
+
+      - name: incurred_occurrences
+        type: simple
+        label: Incurred Occurrences
+        agg: sum
+        expr: i_occs
+
+  - name: time_spine_daily
+    description: Daily time spine for MetricFlow semantic-layer joins and time-based aggregations.
+    time_spine:
+      standard_granularity_column: date_day
+    columns:
+      - name: date_day
+        granularity: day
