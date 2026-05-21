@@ -5,19 +5,17 @@
     )
 }}
 
-/*
+{#
     Carrier_B raw → standardized column names and types.
 
-    NOTE: This version references {{ ref('synthetic_carrier_b') }} as a seed
-    for local testing. To wire up a real source table, swap the ref() call
-    on line 21 back to:
+    This version refs synthetic_carrier_b as a seed for local testing.
+    To wire up a real source table, swap the ref() call below to:
         {{ source('carrier_b_raw', 'synthetic_carrier_b') }}
     and restore _carrier_b__sources.yml.
 
-    nullif(col, 'NULL') defensive wrappers handle the literal "NULL" string
-    that appears in the seed CSV for missing values. When sourcing from a
-    real warehouse table these wrappers are harmless no-ops.
-*/
+    nullif(col, 'NULL') wrappers handle the literal "NULL" string in the
+    seed CSV. Against a real warehouse table they are harmless no-ops.
+#}
 
 with src as (
 
@@ -58,7 +56,7 @@ renamed as (
         {{ normalize_asl('asl') }}                                        as asl_normalized,
         lpad(cast(class_cd as varchar), 5, '0')                           as class_cd,
 
-        -- Dates (eff/exp parsed from mixed formats; acc/rpt are ISO in source)
+        -- Dates
         {{ parse_mixed_date('eff_dt') }}                                  as policy_eff_date,
         {{ parse_mixed_date('exp_dt') }}                                  as policy_exp_date,
         try_to_date(nullif(acc_dt, 'NULL'))                               as acc_date,
