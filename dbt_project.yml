@@ -35,8 +35,28 @@ clean-targets:         # directories to be removed by `dbt clean`
 # continue to be built as views. These settings can be overridden in the individual model files
 # using the `{{ config(...) }}` macro.
 
+
+
+vars:
+  carrier_code: 'CARRIER_B'
+  eval_date: '2025-12-31'
+
 models:
   my_new_project:
-    # Applies to all files under models/example/
-    example:
+    staging:
+      +materialized: view
+      +schema: staging
+      carrier_b:
+        +tags: ['carrier_b', 'staging']
+    intermediate:
+      +materialized: view
+      +schema: intermediate
+      +tags: ['intermediate', 'gl']
+    marts:
       +materialized: table
+      +schema: marts
+      +tags: ['marts', 'gl']
+
+seeds:
+  my_new_project:
+    +quote_columns: false

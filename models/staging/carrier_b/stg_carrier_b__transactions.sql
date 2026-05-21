@@ -8,52 +8,41 @@
 /*
     Carrier_B raw → standardized column names and types.
 
-    Responsibilities at this layer:
-        - rename columns to project standards (POL_NBR → policy_id, etc.)
-        - cast to target types (varchar / integer / date / number)
-        - parse mixed-format date strings via parse_mixed_date macro
-        - normalize ASL via normalize_asl macro
-        - zero-pad ZIP and class code
-        - drop PII columns (insrd_name, insrd_addr_1, insrd_city)
+    NOTE: This version references {{ ref('synthetic_carrier_b') }} as a seed
+    for local testing. To wire up a real source table, swap the ref() call
+    on line 21 back to:
+        {{ source('carrier_b_raw', 'synthetic_carrier_b') }}
+    and restore _carrier_b__sources.yml.
 
-    Explicitly NOT responsibilities of this layer:
-        - any filtering (GL filter happens in int_gl__filtered_transactions)
-        - any joins (enrichment happens in int_gl__policies_enriched)
-        - any business logic (size bands, SOL, QC flags, etc.)
+    nullif(col, 'NULL') defensive wrappers handle the literal "NULL" string
+    that appears in the seed CSV for missing values. When sourcing from a
+    real warehouse table these wrappers are harmless no-ops.
 */
 
 with src as (
 
-    select * from {{ source('carrier_b_raw', 'synthetic_carrier_b') }}
+    select * from {{ ref('synthetic_carrier_b') }}
 
 ),
 
 renamed as (
 
     select
-        -----------------------------------------------------------------------
-        -- Tracking columns (carrier + submission identifiers)
-        -----------------------------------------------------------------------
+        -- Tracking
         '{{ var("carrier_code") }}'                                       as carrier_code,
         '{{ var("carrier_code") }}_'
             || replace('{{ var("eval_date") }}', '-', '')                 as submission_id,
         cast('{{ var("eval_date") }}' as date)                            as eval_date,
 
-        -----------------------------------------------------------------------
         -- Identifiers
-        -----------------------------------------------------------------------
         cast(pol_nbr as varchar)                                          as policy_id,
-        claim_nbr                                                         as claim_id,
+        nullif(claim_nbr, 'NULL')                                         as claim_id,
         cast(null as varchar)                                             as location_id,
         cast(null as varchar)                                             as claimant_id,
 
-        -----------------------------------------------------------------------
-        -- Geography
-        -- Note: insrd_name / insrd_addr_1 / insrd_city are PII and are
-        -- deliberately omitted from the select list at this layer.
-        -----------------------------------------------------------------------
+        -- Geography (PII omitted: insrd_name / insrd_addr_1 / insrd_city)
         case
-            when upper(trim(coalesce(insrd_st, ''))) in ('', 'NAN', 'NONE') then null
+            when upper(trim(coalesce(insrd_st, ''))) in ('', 'NAN', 'NONE', 'NULL') then null
             else upper(trim(insrd_st))
         end                                                               as state,
 
@@ -65,35 +54,25 @@ renamed as (
             )
         end                                                               as zip_cd,
 
-        -----------------------------------------------------------------------
         -- Codes
-        -----------------------------------------------------------------------
         {{ normalize_asl('asl') }}                                        as asl_normalized,
         lpad(cast(class_cd as varchar), 5, '0')                           as class_cd,
 
-        -----------------------------------------------------------------------
-        -- Dates (mixed-format parsing happens here)
-        -----------------------------------------------------------------------
+        -- Dates (eff/exp parsed from mixed formats; acc/rpt are ISO in source)
         {{ parse_mixed_date('eff_dt') }}                                  as policy_eff_date,
         {{ parse_mixed_date('exp_dt') }}                                  as policy_exp_date,
-        acc_dt                                                            as acc_date,
-        rpt_dt                                                            as rpt_date,
+        try_to_date(nullif(acc_dt, 'NULL'))                               as acc_date,
+        try_to_date(nullif(rpt_dt, 'NULL'))                               as rpt_date,
 
-        -----------------------------------------------------------------------
         -- Categoricals
-        -----------------------------------------------------------------------
         upper(trim(pol_type))                                             as top,
-        upper(trim(clm_status))                                           as clm_status_raw,
-        loss_type                                                         as tol,
+        upper(trim(nullif(clm_status, 'NULL')))                           as clm_status_raw,
+        nullif(loss_type, 'NULL')                                         as tol,
 
-        -----------------------------------------------------------------------
-        -- Premium (kept as integer at staging; downstream multiplies by float)
-        -----------------------------------------------------------------------
+        -- Premium
         cast(wrt_prem as integer)                                         as wprem,
 
-        -----------------------------------------------------------------------
-        -- Loss columns (decimal types preserved; rounding happens at int layer)
-        -----------------------------------------------------------------------
+        -- Loss columns (kept as decimals; rounded in int_gl__claims_enriched)
         cast(pd_indem     as number(38, 2))                               as pd_indem,
         cast(case_rsv     as number(38, 2))                               as case_rsv,
         cast(recovery_amt as number(38, 2))                               as recovery_amt,
