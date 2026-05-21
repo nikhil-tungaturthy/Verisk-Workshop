@@ -1,0 +1,53 @@
+# =============================================================================
+# Add these blocks to your existing dbt_project.yml.
+# Replace `verisk_gl` with your actual project name (the `name:` field at the
+# top of dbt_project.yml).
+# =============================================================================
+
+# --- vars ---------------------------------------------------------------------
+# Add to the top-level `vars:` block (create it if it doesn't exist).
+vars:
+  # Carrier identification — set per-run via --vars in CI/CD
+  carrier_code: 'CARRIER_B'
+
+  # Evaluation date drives the pro-rata earned premium calculation and the
+  # SUBMISSION_ID suffix. Override per run, e.g.:
+  #   dbt build --vars '{eval_date: "2026-03-31"}'
+  eval_date: '2025-12-31'
+
+  # Source landing location for Carrier_B raw files. Override per environment.
+  carrier_b_raw_database: 'RAW'
+  carrier_b_raw_schema:   'CARRIER_B'
+
+# --- models -------------------------------------------------------------------
+# Merge into your existing `models:` block.
+models:
+  verisk_gl:                       # ← replace with your project name
+    staging:
+      +materialized: view
+      +schema: staging
+      carrier_b:
+        +tags: ['carrier_b', 'staging']
+    intermediate:
+      +materialized: view
+      +schema: intermediate
+      +tags: ['intermediate', 'gl']
+    marts:
+      +materialized: table
+      +schema: marts
+      +tags: ['marts', 'gl']
+
+# --- seeds --------------------------------------------------------------------
+# Merge into your existing `seeds:` block.
+seeds:
+  verisk_gl:                       # ← replace with your project name
+    +schema: reference_data
+    +quote_columns: false
+    +tags: ['reference_data']
+
+# --- tests --------------------------------------------------------------------
+# Optional: set a default severity if you want all warning-level checks routed
+# through a separate alert path. Leave commented out unless you have a use case.
+# tests:
+#   +store_failures: true
+#   +severity: warn

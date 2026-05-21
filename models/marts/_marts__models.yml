@@ -1,0 +1,219 @@
+version: 2
+
+models:
+  - name: fct_gl_transactions
+    description: |
+      Canonical Verisk-format GL transaction fact. One row per source row
+      (policy row, optionally with claim). Carrier-agnostic — built from
+      per-carrier intermediate models, unioned in int_gl__filtered_transactions
+      when more than one carrier is loaded.
+
+      Column ordering follows the Verisk output schema (notebook 04 /
+      GL Data Transformation Business Rules v2 Section 1) and should not
+      be reordered downstream without a coordinated review.
+
+    config:
+      contract:
+        enforced: false   # set to true once Verisk spec is locked in
+
+    columns:
+      - name: carrier_code
+        description: Carrier identifier (e.g., 'CARRIER_B')
+        tests:
+          - not_null
+
+      - name: submission_id
+        description: Carrier + eval date in format CARRIER_X_YYYYMMDD
+        tests:
+          - not_null
+
+      - name: eval_date
+        description: Evaluation date for the submission
+        tests:
+          - not_null
+
+      - name: policy_id
+        description: Policy identifier (string)
+        tests:
+          - not_null
+
+      - name: location_id
+        description: Location identifier (null for Carrier_B — no location data)
+
+      - name: claim_id
+        description: Claim identifier; null on premium-only rows
+
+      - name: claimant_id
+        description: Claimant identifier (null for Carrier_B — no claimant-level data)
+
+      - name: policy_eff_date
+        description: Policy effective date
+        tests:
+          - not_null
+
+      - name: policy_exp_date
+        description: Policy expiration date
+        tests:
+          - not_null
+
+      - name: policy_size_band
+        description: Bucket assigned by written premium
+        tests:
+          - accepted_values:
+              values: ['MICRO', 'SMALL', 'MEDIUM', 'LARGE', 'JUMBO']
+
+      - name: st
+        description: |
+          Insured state (2-letter). Warn-level not_null — known carriers
+          ship rows with missing state; downstream consumers filter these out.
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+      - name: sub
+        description: Subline (GL-PO premises/operations, GL-PC products/completed-ops)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['GL-PO', 'GL-PC']
+
+      - name: terr
+        description: Territory (first 3 chars of zip_cd)
+
+      - name: zip_cd
+        description: 5-digit zero-padded ZIP code
+
+      - name: mcg
+        description: Mid-CG indicator (null — not available from any carrier yet)
+
+      - name: class
+        description: 5-digit zero-padded ISO GL class code
+
+      - name: year
+        description: Policy year (from policy_eff_date)
+        tests:
+          - not_null
+
+      - name: qtr
+        description: Policy quarter (from policy_eff_date)
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4]
+
+      - name: acc_year
+        description: Accident year (loss rows only)
+
+      - name: acc_qtr
+        description: Accident quarter (loss rows only)
+        tests:
+          - accepted_values:
+              values: [1, 2, 3, 4]
+              config:
+                where: "acc_qtr is not null"
+
+      - name: rep_year
+        description: Report year (loss rows only)
+
+      - name: rep_qtr
+        description: Report quarter (loss rows only)
+        tests:
+          - accepted_values:
+              values: [1, 2, 3, 4]
+              config:
+                where: "rep_qtr is not null"
+
+      - name: top
+        description: Type of policy (MONO or PKG)
+        tests:
+          - accepted_values:
+              values: ['MONO', 'PKG']
+
+      - name: cov
+        description: Coverage trigger (OCC occurrence, CM claims-made)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['OCC', 'CM']
+
+      - name: exp_ind
+        description: Exposure indicator (always false for Carrier_B — no exposure data)
+
+      - name: exp_base
+        description: Exposure base (null — not available)
+
+      - name: tol
+        description: Type of Loss (passthrough descriptive value, loss rows only)
+
+      - name: sol
+        description: Size of Loss band ('0' carve-out, '1'-'11' by incurred amount)
+        tests:
+          - accepted_values:
+              values: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
+              config:
+                where: "sol is not null"
+
+      - name: claim_status
+        description: Standardized status code (O open, C closed, R reopened)
+        tests:
+          - accepted_values:
+              values: ['O', 'C', 'R']
+              config:
+                where: "claim_status is not null"
+
+      - name: status_date
+        description: |
+          Status date for the claim. Currently proxied from rpt_date because
+          no carrier ships an explicit status_date column. Every row using
+          the proxy carries STATUS_DATE_PROXY in qc_flag.
+
+      - name: wprem
+        description: Written premium (integer)
+        tests:
+          - not_null
+
+      - name: prem
+        description: Pro-rata earned premium at eval_date (3 decimals)
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: "<= wprem * 1.001"
+              name: prem_le_wprem
+              config:
+                severity: error
+
+      - name: expo
+        description: Earned exposure (null — no exposure data)
+
+      - name: wexpo
+        description: Written exposure (null — no exposure data)
+
+      - name: tl_paid_indem
+        description: Total paid indemnity (loss rows only)
+
+      - name: tl_inc_indem
+        description: Total incurred indemnity = paid + case_reserve - recovery
+
+      - name: p_alae
+        description: Paid Allocated Loss Adjustment Expense
+
+      - name: i_alae
+        description: Incurred ALAE
+
+      - name: tl_paid_ulae
+        description: Paid Unallocated LAE (null — not available)
+
+      - name: tl_inc_ulae
+        description: Incurred ULAE (null — not available)
+
+      - name: p_occs
+        description: Paid occurrence count (1 if pd_indem > 0, else null)
+
+      - name: i_occs
+        description: Incurred occurrence count (1 on every claim row)
+
+      - name: qc_flag
+        description: |
+          Semicolon-delimited quality flags. Null on clean rows.
+          See int_gl__qc_flags model header for the full flag list and
+          definitions.

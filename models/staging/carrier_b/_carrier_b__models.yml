@@ -1,0 +1,84 @@
+version: 2
+
+models:
+  - name: stg_carrier_b__transactions
+    description: |
+      Carrier_B raw → standardized column names and types. Pure renames,
+      casts, and date parsing. No business logic, no filters, no joins.
+
+      PII columns (insrd_name, insrd_addr_1, insrd_city) are deliberately
+      dropped here and never propagate downstream — verify by inspecting
+      the SELECT list of this model.
+
+    columns:
+      - name: carrier_code
+        description: Always 'CARRIER_B' for rows from this staging model
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['CARRIER_B']
+
+      - name: submission_id
+        description: Format CARRIER_B_YYYYMMDD using the eval_date var
+        tests:
+          - not_null
+
+      - name: eval_date
+        description: Evaluation date for the submission (from var('eval_date'))
+        tests:
+          - not_null
+
+      - name: policy_id
+        description: Policy identifier (string)
+        tests:
+          - not_null
+
+      - name: claim_id
+        description: Claim identifier; null on premium-only rows
+
+      - name: state
+        description: Upper-trimmed insured state code; null when raw is blank/NaN
+
+      - name: zip_cd
+        description: 5-digit zero-padded ZIP code (truncated to 5 if source has more digits)
+
+      - name: asl_normalized
+        description: ASL code without decimal point (17.1 → '171')
+        tests:
+          - not_null
+
+      - name: class_cd
+        description: 5-digit zero-padded class code
+
+      - name: policy_eff_date
+        description: Parsed policy effective date
+        tests:
+          - not_null
+
+      - name: policy_exp_date
+        description: Parsed policy expiration date
+        tests:
+          - not_null
+
+      - name: top
+        description: Type of policy (MONO or PKG)
+        tests:
+          - accepted_values:
+              values: ['MONO', 'PKG']
+
+      - name: clm_status_raw
+        description: Raw claim status string before mapping to single-char code
+        tests:
+          - accepted_values:
+              values: ['OPEN', 'CLSD', 'REOP']
+              config:
+                where: "claim_id is not null"
+
+      - name: wprem
+        description: Written premium (integer)
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+              config:
+                severity: warn

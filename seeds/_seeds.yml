@@ -1,0 +1,104 @@
+version: 2
+
+seeds:
+  - name: asl_to_subline
+    description: |
+      ASL code → Verisk subline classification (GL-PO for premises/operations,
+      GL-PC for products/completed-ops). Source: GL Data Transformation Business
+      Rules v2, Section 3.2.
+    config:
+      column_types:
+        asl_normalized: varchar(4)
+        subline: varchar(10)
+    columns:
+      - name: asl_normalized
+        description: ASL code with decimal stripped (e.g., 17.1 → '171')
+        tests:
+          - not_null
+          - unique
+      - name: subline
+        description: Verisk subline code
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['GL-PO', 'GL-PC']
+
+  - name: asl_to_coverage
+    description: |
+      ASL code → coverage trigger. ASL ending in 1 → OCC (occurrence),
+      ending in 2 → CM (claims-made). Source: GL Data Transformation
+      Business Rules v2, Section 3.4.
+    config:
+      column_types:
+        asl_normalized: varchar(4)
+        coverage_trigger: varchar(3)
+    columns:
+      - name: asl_normalized
+        tests:
+          - not_null
+          - unique
+      - name: coverage_trigger
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['OCC', 'CM']
+
+  - name: policy_size_bands
+    description: |
+      Policy size band thresholds, by written premium (inclusive boundaries).
+      JUMBO has no upper bound (band_max is null). Source: GL Data
+      Transformation Business Rules v2, Section 1.4.
+    config:
+      column_types:
+        band: varchar(10)
+        band_min: integer
+        band_max: integer
+    columns:
+      - name: band
+        tests:
+          - not_null
+          - unique
+          - accepted_values:
+              values: ['MICRO', 'SMALL', 'MEDIUM', 'LARGE', 'JUMBO']
+      - name: band_min
+        tests:
+          - not_null
+
+  - name: size_of_loss_bands
+    description: |
+      Size of Loss (SOL) band thresholds, by incurred indemnity. Bands 1-11
+      cover positive incurred amounts. Band '0' is special-cased in code for
+      (incurred=0 AND ALAE>0) and is intentionally NOT in this seed.
+      Source: GL Data Transformation Business Rules v2, Section 3.5.
+    config:
+      column_types:
+        band: varchar(2)
+        band_min: integer
+        band_max: integer
+    columns:
+      - name: band
+        tests:
+          - not_null
+          - unique
+      - name: band_min
+        tests:
+          - not_null
+
+  - name: claim_status_codes
+    description: |
+      Raw claim status (from carrier source) → Verisk standardized status code.
+      Source: GL Data Transformation Business Rules v2, Section 3.5.
+    config:
+      column_types:
+        raw_status: varchar(10)
+        status_code: varchar(1)
+    columns:
+      - name: raw_status
+        tests:
+          - not_null
+          - unique
+      - name: status_code
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['O', 'C', 'R']

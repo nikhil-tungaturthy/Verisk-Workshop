@@ -1,0 +1,123 @@
+version: 2
+
+models:
+  - name: int_gl__filtered_transactions
+    description: |
+      Staging transactions filtered to GL ASL codes only (171, 172, 181, 182).
+      In a multi-carrier deployment, this is also where carriers UNION together
+      via dbt_utils.union_relations.
+    columns:
+      - name: policy_id
+        tests:
+          - not_null
+      - name: asl_normalized
+        tests:
+          - accepted_values:
+              values: ['171', '172', '181', '182']
+      - name: wprem
+        tests:
+          - not_null
+
+  - name: int_gl__policies_enriched
+    description: |
+      GL transactions enriched with dimensional fields (subline, coverage
+      trigger, territory, year/quarter dimensions), policy size band, and
+      pro-rata earned premium.
+    columns:
+      - name: policy_id
+        tests:
+          - not_null
+      - name: sub
+        description: Subline derived from ASL via asl_to_subline seed
+        tests:
+          - accepted_values:
+              values: ['GL-PO', 'GL-PC']
+      - name: cov
+        description: Coverage trigger derived from ASL via asl_to_coverage seed
+        tests:
+          - accepted_values:
+              values: ['OCC', 'CM']
+      - name: policy_size_band
+        description: Bucket assignment by written premium via policy_size_bands seed
+        tests:
+          - accepted_values:
+              values: ['MICRO', 'SMALL', 'MEDIUM', 'LARGE', 'JUMBO']
+      - name: prem
+        description: Pro-rata earned premium at eval_date
+        tests:
+          - dbt_utils.expression_is_true:
+              expression: "<= wprem * 1.001"
+              config:
+                severity: warn
+      - name: year
+        tests:
+          - not_null
+      - name: qtr
+        tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4]
+      - name: acc_qtr
+        tests:
+          - accepted_values:
+              values: [1, 2, 3, 4]
+              config:
+                where: "acc_qtr is not null"
+      - name: rep_qtr
+        tests:
+          - accepted_values:
+              values: [1, 2, 3, 4]
+              config:
+                where: "rep_qtr is not null"
+
+  - name: int_gl__claims_enriched
+    description: |
+      Adds claim-level metrics: paid/incurred indemnity, ALAE, occurrence
+      counts, claim status, and the proxied status_date.
+    columns:
+      - name: tl_inc_indem
+        description: Incurred indemnity = paid + case_reserve - recovery (claim rows only)
+      - name: claim_status
+        description: Single-char status code derived from claim_status_codes seed
+        tests:
+          - accepted_values:
+              values: ['O', 'C', 'R']
+              config:
+                where: "claim_status is not null"
+      - name: i_occs
+        tests:
+          - accepted_values:
+              values: [1]
+              config:
+                where: "i_occs is not null"
+      - name: p_occs
+        tests:
+          - accepted_values:
+              values: [1]
+              config:
+                where: "p_occs is not null"
+
+  - name: int_gl__claims_with_sol
+    description: |
+      Adds Size of Loss (SOL) band, derived from tl_inc_indem and i_alae.
+      Special carve-out: tl_inc_indem=0 with i_alae>0 → sol='0'.
+    columns:
+      - name: sol
+        description: SOL band ('0' through '11') or null on premium-only / negative-incurred rows
+        tests:
+          - accepted_values:
+              values: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11']
+              config:
+                where: "sol is not null"
+
+  - name: int_gl__qc_flags
+    description: |
+      Adds the semicolon-delimited qc_flag column. See the model's header
+      comment for the full list of flags and their definitions.
+    columns:
+      - name: qc_flag
+        description: |
+          Semicolon-delimited list of quality flags. Null when no flags fire.
+          Possible flags: MISSING_STATE, MISSING_YEAR, MISSING_CLASS,
+          EARNED_GT_WRITTEN, NEGATIVE_INCURRED, LOSS_BEFORE_INCEPTION,
+          CLAIM_BEFORE_INCEPTION, STATUS_DATE_PROXY, LOSS_ON_ZERO_PREM.
