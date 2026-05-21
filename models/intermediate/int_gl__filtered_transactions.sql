@@ -5,22 +5,13 @@
     )
 }}
 
-/*
+{#
     GL filter: keep only ASL codes 171, 172, 181, 182.
 
     Non-GL codes (e.g., 17.65, 19.x) are dropped here. In a multi-carrier
     deployment this is also the natural place to UNION across per-carrier
-    staging models using dbt_utils.union_relations:
-
-        {{ dbt_utils.union_relations(
-            relations=[
-                ref('stg_carrier_a__transactions'),
-                ref('stg_carrier_b__transactions'),
-                ref('stg_carrier_c__transactions'),
-            ],
-            source_column_name='carrier_code'
-        ) }}
-*/
+    staging models using dbt_utils.union_relations.
+#}
 
 select *
 from {{ ref('stg_carrier_b__transactions') }}

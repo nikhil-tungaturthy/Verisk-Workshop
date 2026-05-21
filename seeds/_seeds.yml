@@ -4,10 +4,6 @@ seeds:
   - name: synthetic_carrier_b
     description: |
       Carrier_B raw landing data, loaded as a seed for local testing.
-      For production, this data lands via the ingestion pipeline and is
-      referenced through a source declaration instead. Swap the ref() call
-      in stg_carrier_b__transactions.sql back to source() to switch modes.
-
       The literal string "NULL" appears in several columns for missing
       values; staging handles this via nullif() wrappers.
     config:
@@ -38,32 +34,25 @@ seeds:
         recovery_amt: number(38, 1)
 
   - name: asl_to_subline
-    description: |
-      ASL code → Verisk subline classification (GL-PO for premises/operations,
-      GL-PC for products/completed-ops). Source: GL Data Transformation Business
-      Rules v2, Section 3.2.
+    description: ASL code → Verisk subline classification (GL-PO or GL-PC)
     config:
       column_types:
         asl_normalized: varchar(4)
         subline: varchar(10)
     columns:
       - name: asl_normalized
-        description: ASL code with decimal stripped (e.g., 17.1 → '171')
         tests:
           - not_null
           - unique
       - name: subline
-        description: Verisk subline code
         tests:
           - not_null
           - accepted_values:
-              values: ['GL-PO', 'GL-PC']
+              arguments:
+                values: ['GL-PO', 'GL-PC']
 
   - name: asl_to_coverage
-    description: |
-      ASL code → coverage trigger. ASL ending in 1 → OCC (occurrence),
-      ending in 2 → CM (claims-made). Source: GL Data Transformation
-      Business Rules v2, Section 3.4.
+    description: ASL code → coverage trigger (OCC or CM)
     config:
       column_types:
         asl_normalized: varchar(4)
@@ -77,13 +66,11 @@ seeds:
         tests:
           - not_null
           - accepted_values:
-              values: ['OCC', 'CM']
+              arguments:
+                values: ['OCC', 'CM']
 
   - name: policy_size_bands
-    description: |
-      Policy size band thresholds, by written premium (inclusive boundaries).
-      JUMBO has no upper bound (band_max is null). Source: GL Data
-      Transformation Business Rules v2, Section 1.4.
+    description: Policy size band thresholds by written premium
     config:
       column_types:
         band: varchar(10)
@@ -95,17 +82,14 @@ seeds:
           - not_null
           - unique
           - accepted_values:
-              values: ['MICRO', 'SMALL', 'MEDIUM', 'LARGE', 'JUMBO']
+              arguments:
+                values: ['MICRO', 'SMALL', 'MEDIUM', 'LARGE', 'JUMBO']
       - name: band_min
         tests:
           - not_null
 
   - name: size_of_loss_bands
-    description: |
-      Size of Loss (SOL) band thresholds, by incurred indemnity. Bands 1-11
-      cover positive incurred amounts. Band '0' is special-cased in code for
-      (incurred=0 AND ALAE>0) and is intentionally NOT in this seed.
-      Source: GL Data Transformation Business Rules v2, Section 3.5.
+    description: SOL band thresholds by incurred indemnity (bands 1-11)
     config:
       column_types:
         band: varchar(2)
@@ -121,9 +105,7 @@ seeds:
           - not_null
 
   - name: claim_status_codes
-    description: |
-      Raw claim status (from carrier source) → Verisk standardized status code.
-      Source: GL Data Transformation Business Rules v2, Section 3.5.
+    description: Raw claim status → standardized status code
     config:
       column_types:
         raw_status: varchar(10)
@@ -137,4 +119,5 @@ seeds:
         tests:
           - not_null
           - accepted_values:
-              values: ['O', 'C', 'R']
+              arguments:
+                values: ['O', 'C', 'R']
