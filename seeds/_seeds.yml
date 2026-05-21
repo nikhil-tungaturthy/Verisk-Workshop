@@ -1,6 +1,42 @@
 version: 2
 
 seeds:
+  - name: synthetic_carrier_b
+    description: |
+      Carrier_B raw landing data, loaded as a seed for local testing.
+      For production, this data lands via the ingestion pipeline and is
+      referenced through a source declaration instead. Swap the ref() call
+      in stg_carrier_b__transactions.sql back to source() to switch modes.
+
+      The literal string "NULL" appears in several columns for missing
+      values; staging handles this via nullif() wrappers.
+    config:
+      tags: ['carrier_b_raw']
+      column_types:
+        pol_nbr: varchar
+        insrd_name: varchar
+        insrd_addr_1: varchar
+        insrd_city: varchar
+        insrd_st: varchar
+        insrd_zip: number(38, 0)
+        eff_dt: varchar
+        exp_dt: varchar
+        asl: number(38, 1)
+        class_cd: number(38, 0)
+        wrt_prem: number(38, 0)
+        ern_prem: varchar
+        pol_type: varchar
+        claim_nbr: varchar
+        acc_dt: varchar
+        rpt_dt: varchar
+        clm_status: varchar
+        loss_type: varchar
+        pd_indem: number(38, 1)
+        case_rsv: number(38, 1)
+        pd_alae: number(38, 1)
+        total_alae: number(38, 1)
+        recovery_amt: number(38, 1)
+
   - name: asl_to_subline
     description: |
       ASL code → Verisk subline classification (GL-PO for premises/operations,
